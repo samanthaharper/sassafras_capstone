@@ -1,0 +1,51 @@
+# Single Nucleotide Polymorphism in Chinese Sassafras Populations
+
+## Background
+Since SNPs can help identify genes that are important and that differ between organisms, we can use them to identify important gene differences that may be due to environmental conditions. The research question is: Can we use machine learning algorithms to mine SNPs to find gene or gene regions of interest between natural cultivars (strains) of Sassafras? This question addresses the need for protecting vulnerable populations of Sassafras that are highly sought after due to their ornamental, lumber, and medicinal value (Guan, et al., 2024). It has also been suggested that climate change will have an impact on the habitat availability for Sassafras in China (Zhang, et al., 2020). Future research could lead to a drought or cold resistant strain of Sassafras for industrial uses. 
+Although numerous methods to study SNPs and identify gene regions exist, none of these methods are without their drawbacks. SNPs are notoriously difficult to study and machine learning techniques may provide new insight towards this problem. One issue is that genetic data is usually very high dimensional data, leading to the ‘curses of dimensionality’; high dimensional data is often computationally costly and may not yield the best results as not all of the data is useful to our aims (Silva et al., 2022). Using methods such as k-fold cross-validation can help create more accurate models and prevent overfitting. Using variables from the environment these plants were collected, including altitude gleaned from their latitude and longitude, weather data such as temperature, precipitation, humidity, and average days of sunshine, and possible data about soil that we can find from the latitudes and longitudes, we will attempt to find SNPs, and therefore gene or gene regions, that predict key differences between Sassafras cultivars.  These results could lead to actionable insights that could guide future research towards protecting this species and may even be able to improve forestry approaches towards minimizing the impacts of climate change and deforestation.
+
+
+## Hypothesis and Prediction
+
+Hypothesis: Underlying genes, as identified by SNPs, in Sassafras are influenced by environmental factors because environmental pressure can cause mutations to persist in a population that is unique to each area.
+
+Prediction: Populations of Sassafras that are under high environmental pressure are more likely to have many predictive SNPs due to evolutionary influences. 
+
+
+## Basic Data
+
+```{r}
+install.packages("vcfR")
+```
+```{r}
+library(vcfR)
+```
+```{r}
+vcf <- read.vcfR( "Data/SNP.vcf", verbose = FALSE )
+vcf
+```
+
+```{r}
+queryMETA(vcf)
+queryMETA(vcf, element = 'GT')
+queryMETA(vcf, element = 'DP')
+queryMETA(vcf, element = 'AD')
+queryMETA(vcf, element = 'GL')
+```
+
+```{r}
+vcf_field_names(vcf)
+```
+
+```{r}
+data <- vcfR2tidy(vcf)
+```
+
+```{r}
+data$fix
+```
+
+```{r}
+data$gt
+```
+
