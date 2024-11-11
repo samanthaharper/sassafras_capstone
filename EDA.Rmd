@@ -1,14 +1,16 @@
 ---
-title: "Exploratory Data Analysis: Sassafras"
-subtitle: "Capstone"
+title: 'Exploratory Data Analysis: Sassafras'
 author: "Samantha Harper"
 date: "11 November 2024"
 output:
+  pdf_document:
+    toc: yes
   html_document:
-    toc: true
-    toc_float: true
+    toc: yes
+    toc_float: yes
     theme: flatly
     fig_crop: no
+subtitle: Capstone
 ---
 
 ```{r setup, include=FALSE}
@@ -22,15 +24,69 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Research Question
 
+The research question is: Can we use machine learning algorithms to mine SNPs to find gene or gene regions of interest between natural cultivars (strains) of Sassafras?
+
 ## Hypothesis
 
+Hypothesis: Underlying genes, as identified by SNPs, in Sassafras are influenced by environmental factors because environmental pressure can cause mutations to persist in a population that is unique to each area.
+
 ## Prediction
+
+Prediction: Populations of Sassafras that are under high environmental pressure are more likely to have many predictive SNPs due to evolutionary influences. 
 
 # Methods
 
 ## Data set and format
 (3-5 sentences)
 
+The data set contains genetic data from *Sassafras tzumu*. Data was collected from 106 individuals across 13 populations in China. The genetic material was sequenced to create the data set, which identified 1,862 single nucleotide polymorphisms (SNPs) and is presented in a Variant Call Format (VCF) file. A VCF file contains three regions, the meta region, the fix region, and the gt region. Each contains different information about the genetic data. 
+
 ## Cleaning and data preparation
-(3-5 sentences)
+In order to access and manipulate the VCF file, several additional R packages were used. The vcfR package allows for loading and manipulation of the data, while the adegenet package was helpful in creating several of the visualizations. [add???]
+
+## Exploratory Data Analysis
+(1-2 paragraphs) [add???]
+
+# Results
+```{r}
+
+```
+
+
+#Discussion
+
+# Appendix
+## Data Dictionary
+```{r}
+data_dict
+```
+
+## Code
+
+```{r}
+#install.packages("vcfR", verbose = FALSE)
+library(vcfR)
+vcf <- read.vcfR( "Data/SNP.vcf", verbose = FALSE )
+#Examine VCF Object
+vcf
+#META Data provides information about the file as well as the abbreviations used elsewhere in the file
+#MAKE TABLE???
+queryMETA(vcf)
+queryMETA(vcf, element = 'GT')
+queryMETA(vcf, element = 'DP')
+queryMETA(vcf, element = 'AD')
+queryMETA(vcf, element = 'GL')
+#
+vcf_field_names(vcf)
+```
+```{r}
+data <- vcfR2tidy(vcf)
+data_dict <- data$meta
+```
+
+
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+```
+
+
 

@@ -15,7 +15,7 @@ Prediction: Populations of Sassafras that are under high environmental pressure 
 ## Basic Data
 
 ```{r}
-install.packages("vcfR")
+install.packages("vcfR", verbose = FALSE)
 ```
 ```{r}
 library(vcfR)
@@ -46,6 +46,10 @@ colnames(vcf@gt)
 ```{r}
 data <- vcfR2tidy(vcf)
 ```
+```{r}
+data$meta
+```
+
 
 ```{r}
 #Summary of the all the SNPs
