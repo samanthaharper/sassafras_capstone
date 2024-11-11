@@ -34,18 +34,98 @@ queryMETA(vcf, element = 'GL')
 ```
 
 ```{r}
+
 vcf_field_names(vcf)
 ```
+```{r}
+#These are the samples
+colnames(vcf@gt)
+```
+
 
 ```{r}
 data <- vcfR2tidy(vcf)
 ```
 
 ```{r}
+#Summary of the all the SNPs
 data$fix
 ```
 
 ```{r}
+#Summary of the all the samples
 data$gt
+```
+```{r}
+install.packages("adegenet")
+library(adegenet)
+```
+
+
+```{r}
+x <- vcfR2genlight(vcf)
+x
+```
+
+```{r}
+x.dist <- dist(x)
+glPlot(x)
+```
+
+```{r}
+myFreq <- glMean(x)
+hist(myFreq, proba=TRUE, col="gold", xlab="Allele frequencies",
+main="Distribution of (second) allele frequencies")
+temp <- density(myFreq)
+lines(temp$x, temp$y*1.5,lwd=2)
+```
+
+
+```{r}
+myFreq <- glMean(x)
+myFreq <- c(myFreq, 1-myFreq)
+hist(myFreq, proba=TRUE, col="darkseagreen3", xlab="Allele frequencies",
+main="Distribution of allele frequencies", nclass=20)
+temp <- density(myFreq, bw=.05)
+lines(temp$x, temp$y*2,lwd=3)
+```
+
+```{r}
+temp <- density(glNA(x), bw=10)
+plot(temp, type="n", xlab="Position in the alignment", main="Location of the missing val", xlim=c(0,1701))
+polygon(c(temp$x,rev(temp$x)), c(temp$y, rep(0,length(temp$x))), col=transp("blue",.3))
+points(glNA(x), rep(0, nLoc(x)), pch="|", col="blue")
+```
+```{r}
+# An empty plot.
+freq_peak_plot(pos=1:40)
+gt <- extract.gt(vcf)
+hets <- is_het(gt)
+# Censor non-heterozygous positions.
+is.na(vcf@gt[,-1][!hets]) <- TRUE
+# Extract allele depths.
+ad <- extract.gt(vcf, element = "AD")
+ad1 <- masplit(ad, record = 1)
+ad2 <- masplit(ad, record = 2)
+freq1 <- ad1/(ad1+ad2)
+freq2 <- ad2/(ad1+ad2)
+myPeaks1 <- freq_peak(freq1, getPOS(vcf))
+is.na(myPeaks1$peaks[myPeaks1$counts < 20]) <- TRUE
+myPeaks2 <- freq_peak(freq2, getPOS(vcf), lhs = FALSE)
+is.na(myPeaks2$peaks[myPeaks2$counts < 20]) <- TRUE
+freq_peak_plot(pos = getPOS(vcf), ab1 = freq1, ab2 = freq2, fp1 = myPeaks1, fp2=myPeaks2)
+```
+
+
+```{r}
+#ChromR object is not working
+#chrom <- create.chromR(name="Supercontig", vcf=vcf, verbose=FALSE)
+```
+
+```{r}
+chrom
+```
+```{r}
+plot(chrom)
 ```
 
