@@ -1,0 +1,36 @@
+---
+title: "Exploratory Data Analysis: Sassafras"
+subtitle: "Capstone"
+author: "Samantha Harper"
+date: "11 November 2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    fig_crop: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE, 
+                      cache.comments = TRUE,
+                      size = 13)
+```
+
+# Background
+
+## Research Question
+
+## Hypothesis
+
+## Prediction
+
+# Methods
+
+## Data set and format
+(3-5 sentences)
+
+## Cleaning and data preparation
+(3-5 sentences)
+
