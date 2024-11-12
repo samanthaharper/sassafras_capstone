@@ -86,7 +86,7 @@ main="Distribution of (second) allele frequencies", ylim=c(0,7))
 temp <- density(myFreq)
 lines(temp$x, temp$y*1.5,lwd=2)
 ```
-
+This graph shows the 
 
 ```{r}
 myFreq <- glMean(x)

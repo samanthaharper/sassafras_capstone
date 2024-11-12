@@ -37,38 +37,101 @@ Prediction: Populations of Sassafras that are under high environmental pressure 
 # Methods
 
 ## Data set and format
-(3-5 sentences)
 
 The data set contains genetic data from *Sassafras tzumu*. Data was collected from 106 individuals across 13 populations in China. The genetic material was sequenced to create the data set, which identified 1,862 single nucleotide polymorphisms (SNPs) and is presented in a Variant Call Format (VCF) file. A VCF file contains three regions, the meta region, the fix region, and the gt region. Each contains different information about the genetic data. 
 
 ## Cleaning and data preparation
-In order to access and manipulate the VCF file, several additional R packages were used. The vcfR package allows for loading and manipulation of the data, while the adegenet package was helpful in creating several of the visualizations. [add???]
+In order to access and manipulate the VCF file, several additional R packages were used. The vcfR package allows for loading and manipulation of the data, while the adegenet package was helpful in creating several of the visualizations. Going forward it may be useful to use ChromR objects as well.
 
 ## Exploratory Data Analysis
-(1-2 paragraphs) [add???]
+My approach to exploratory data analysis was to engage with the various R objects designed to hold genetic data and to explore the standard graphs and visualizations for those objects. Since the data is going to require some changes to be compatable with a machine learning model, I focused on understanding the big picture of the SNPs. The graphs below show the distribution of the SNPs as well as the distribution of the alleles. I also wanted to highlight any missing data that could have an impact on the ML model going forward. 
 
 # Results
 ```{r}
+if (!requireNamespace("vcfR", quietly = TRUE)) {
+  install.packages("vcfR", verbose = FALSE)
+}
+library(vcfR)
+vcf <- read.vcfR( "Data/SNP.vcf", verbose = FALSE )
+#examine VCF Object
+vcf
+```
+```{r}
+if (!requireNamespace("adegenet", quietly = TRUE)) {
+  install.packages("adegenet")
+}
+library(adegenet)
+```
+A genlight object is created to store and manipulate genetic data. 
+```{r}
+#Create a genlight object
+x <- vcfR2genlight(vcf)
+x
+```
+```{r}
+snpposi.plot(position(x), genome.size=150, codon=FALSE)
+```
+Looking at the disribution of the SNPs throughout the genome, we can see that they are fairly evenly spaced. 
 
+```{r}
+x.dist <- dist(x)
+glPlot(x)
+```
+Here we can see that there are up to two alternative bases and how those are distributed throughout the samples. We can see some light banding in the data suggesting that different populations may have differing proportions of alternative alleles. 
+
+```{r}
+myFreq <- glMean(x)
+hist(myFreq, proba=TRUE, col="gold", xlab="Allele frequencies",
+main="Distribution of (second) allele frequencies", ylim=c(0,7))
+temp <- density(myFreq)
+lines(temp$x, temp$y*1.5,lwd=2)
+```
+This graph shows that most SNPs have a low frequency, but there are some that have higher frequencies as well. This means that most of the SNPs in this set appear fewer times. 
+
+```{r}
+myFreq <- glMean(x)
+myFreq <- c(myFreq, 1-myFreq)
+hist(myFreq, proba=TRUE, col="darkseagreen3", xlab="Allele frequencies",
+main="Distribution of allele frequencies", nclass=20, ylim = c(0,3.5))
+temp <- density(myFreq, bw=.05)
+lines(temp$x, temp$y*2,lwd=3)
+```
+
+This can also be visualized as a symmetric graph due to the nature of alleles having two options. 
+
+```{r}
+temp <- density(glNA(x), bw=10)
+plot(temp, type="n", xlab="Position in the alignment", main="Location of the missing val", xlim=c(-40,55))
+polygon(c(temp$x,rev(temp$x)), c(temp$y, rep(0,length(temp$x))), col=transp("blue",.3))
+points(glNA(x), rep(0, nLoc(x)), pch="|", col="blue")
+```
+
+Here we can see the locations of the missing data within the genome. They seem to be focused early in the sequence. 
+
+```{r}
+snp_counts <- table(vcf@fix[, "CHROM"])
+#snp_counts
+#This was supposed to be a table of SNPs per chromosome, but it is much too large to print
 ```
 
 
-#Discussion
+# Discussion
+The key results show that this is a very large and interesting dataset. While most of the allele frequencies are very high or low, there are a number of alleles that show promise for being influenced by environment. Additionally, the banding present in the index plot below, suggests that different populations do show different distributions of SNPs. This is promising for our future goals to identify specific SNPs, and therefore specific genes, that are linked with environmental factors. While there is some missing data, it seems fairly localized and not impactful for our model as we move forward. 
+
+As I move forward, the most important data processing step is to produce data in a format compatable with machine learning models. There are txt files that may lend themselves to easier manipulation. Some R packages such as 'fuc' have built-in functions to split VCF data that may be useful. 
 
 # Appendix
 ## Data Dictionary
 ```{r}
+data <- vcfR2tidy(vcf)
+data_dict <- data$meta
 data_dict
 ```
 
 ## Code
 
 ```{r}
-#install.packages("vcfR", verbose = FALSE)
-library(vcfR)
-vcf <- read.vcfR( "Data/SNP.vcf", verbose = FALSE )
-#Examine VCF Object
-vcf
+
 #META Data provides information about the file as well as the abbreviations used elsewhere in the file
 #MAKE TABLE???
 queryMETA(vcf)
@@ -78,14 +141,18 @@ queryMETA(vcf, element = 'AD')
 queryMETA(vcf, element = 'GL')
 #
 vcf_field_names(vcf)
+#sample names
+colnames(vcf@gt)
+
 ```
+
 ```{r}
-data <- vcfR2tidy(vcf)
-data_dict <- data$meta
-```
-
-
-```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+#Metadata
+data$meta
+#Summary of the all the SNPs
+data$fix
+#Summary of the all the samples
+data$gt
 ```
 
 
