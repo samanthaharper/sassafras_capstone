@@ -57,10 +57,7 @@ data$meta
 data$fix
 ```
 
-```{r}
-#Summary of the all the samples
-data$gt
-```
+
 ```{r}
 if (!requireNamespace("adegenet", quietly = TRUE)) {
   install.packages("adegenet")
@@ -130,9 +127,42 @@ freq_peak_plot(pos = getPOS(vcf), ab1 = freq1, ab2 = freq2, fp1 = myPeaks1, fp2=
 ```
 
 ```{r}
-chrom
+#chrom
 ```
 ```{r}
-plot(chrom)
+#plot(chrom)
+```
+
+
+# Pre Processing
+
+```{r}
+#txt file won't load? 
+#I've tried a few different delim options
+#And increasing the sys.setenv size
+if (!requireNamespace("readr", quietly = TRUE)) {
+  install.packages("readr", verbose = FALSE)
+}
+
+library(readr)
+```
+```{r}
+#I got the txt file to load!
+#but I'm not super sure what to do with it now?
+#I assume I can do a join with something, but I have no idea what
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 4)
+SNP <- read_delim("./Data/SNP.txt", delim = " ")
+```
+
+```{r}
+data <- vcfR2tidy(vcf)
+```
+```{r}
+#Summary of the all the samples
+data$gt
+#metadata
+data$meta
+#summary of SNPs
+data$fix
 ```
 
