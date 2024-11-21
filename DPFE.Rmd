@@ -1,0 +1,336 @@
+---
+title: 'Data Preprocessing and Feature Engineering: Sassafras'
+author: "Samantha Harper"
+date: "20 November 2024"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+    theme: flatly
+    fig_crop: no
+subtitle: Capstone
+---
+# Background
+
+## Research Question
+
+The research question is: Can we use machine learning algorithms to mine SNPs to find gene or gene regions of interest between natural cultivars (strains) of Sassafras?
+
+## Hypothesis
+
+Hypothesis: Underlying genes, as identified by SNPs, in Sassafras are influenced by environmental factors because environmental pressure can cause mutations to persist in a population that is unique to each area.
+
+## Prediction
+
+Prediction: Populations of Sassafras that are under high environmental pressure are more likely to have many predictive SNPs due to evolutionary influences. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE, 
+                      cache.comments = TRUE,
+                      size = 13)
+```
+
+# Methods
+The goals for data pre-processing and feature engineering were to transform the VCF data into a format compatible with machine learning algorithms and to apply some level of feature selection to prepare for accurate results from the ML models. The first step is to transform the dataset out of VCF format, keeping only the relevant data. Then normalization or centering should be applied to the data. The data needs to be split into test and training sets, and feature selection should remove lowly expressed genes only after the data has been split. Then, cross validation can be used to help with hyperparameter tuning and with our relatively small sample size. 
+
+## Preprocessing
+The vcfR package was used to convert the VCF data to a tibble. The metadata from the original study was then cleaned and joined with the sample names, since the original dataset only contained a row for each population, instead of for each sample. The DeSeq Object requires a very specific matrix, so the metadata and the genetic data both had row names set and compared to ensure the object would load correctly. Once the DeSeq Object was created, a Variation Stabilizing Transformation was applied. Since the read counts for genetic data vary wildly, it is essential that some kind of transformation be applied. The 'local' VST was applied after comparing the four options and comparing the resulting standard deviation and spread of the data. 
+
+## Feature Selection
+Before any feature selection, the data was split into test and training sets to prevent data leakage. Principal Component Analysis (PCA) was applied to the data. PCA is used to reduce the dimensionality of the data and therefore help highlight important features. The PCA strategies that were used didn't seem to fit the numerical nature of the data, and an alternative will be considered before modelling. 
+
+### Results
+
+```{r}
+#Install packages and load library
+
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
+rm(list = ls(all = TRUE))
+
+pacman::p_load(tidyverse,
+               vcfR,
+               ggplot2, 
+               kableExtra,
+               BiocManager,
+               DESeq2,
+               pheatmap,
+               RColorBrewer,
+               vsn,
+               gridExtra,
+               ggrepel,
+               e1071,
+               caret,
+               randomForest,
+               ranger,
+               multtest
+)
+```
+
+```{r}
+#Load VCF data
+vcf <- read.vcfR( "Data/SNP.vcf", verbose = FALSE )
+#examine VCF object
+vcf
+```
+
+
+
+```{r}
+#Convert data to tibble
+data <- vcfR2tidy(vcf)
+```
+
+```{r}
+#Isolate Counts Data
+gdata <- data$gt
+#Load Metadata
+sass_metadata <- read_csv("Data/sass_metadata.csv", col_types = cols(Longitude = col_number(), Latitude = col_number(), `Number of Samples` = col_integer(), Temperature = col_number(), Precipitation = col_integer(), `Altitude (m)` = col_integer()))
+```
+
+
+```{r}
+#the goal is to have my matrix match the counts data from demo1
+#then I can feed the matrix into DeSeq2 and use the resulting counts
+#and hopefully those are correct?
+gdata$chrom_info <- paste(gdata$ChromKey, "_", gdata$POS)
+gdata <- gdata %>% select(chrom_info, Indiv, gt_AD)
+gdata <- gdata %>% pivot_wider(names_from = Indiv, values_from = gt_AD)
+```
+
+```{r}
+#set up matrix
+gdata <- as.data.frame(gdata)
+rownames(gdata) <- gdata$chrom_info
+gdata <- gdata[ ,-1]
+```
+
+
+```{r}
+#create proper metadata
+indivs <- unique(data$gt$Indiv)
+indivs <- as.data.frame(indivs)
+indivs$id <- substr(indivs$indivs, 1, 2)
+sass_metadata$id <- substr(sass_metadata$Code, 1, 2)
+joined_meta <- inner_join(sass_metadata, indivs, by = 'id')
+joined_meta <- subset(joined_meta, select = -c(Code, id))
+```
+
+
+```{r}
+#Join metadata with sample names
+joined_meta <- as.data.frame(joined_meta)
+rownames(joined_meta) <- joined_meta$indivs
+joined_meta <- subset(joined_meta, select = -c(indivs))
+```
+
+```{r}
+#rename column to exclude the space
+joined_meta$Altitude <- joined_meta$`Altitude (m)`
+```
+
+
+
+```{r, echo = TRUE, results='asis'}
+#Compare columns and rows to prep for DeSeq Object
+print(all(colnames(gdata) %in% rownames(joined_meta)))
+print(all(colnames(gdata) == rownames(joined_meta)))
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+#Create Design Object
+dsgnObject <- DESeqDataSetFromMatrix(countData = gdata, 
+                                     colData = joined_meta,
+                                     design = ~ Longitude + Latitude + Temperature + Altitude)
+dim(dsgnObject)
+```
+
+```{r, echo = F, warning=FALSE, message=FALSE}
+#Set up VST
+runVST <- function(dsgnObject, blind, fitType, makePlot = TRUE, writeTable = FALSE, writeRData = FALSE) {
+  ## Perform the VST
+  
+  # Check if the fitType is the regularized log:
+  if(fitType == "rlog") {
+    vsData <- rlog(dsgnObject, blind = blind)
+  }
+  ## Otherwise:
+  else {
+    vsData <- varianceStabilizingTransformation(dsgnObject, 
+                                              blind = blind, 
+                                              fitType = fitType)
+  }
+  
+  if(makePlot == TRUE) {
+    # Plot the effect of the VS transform:
+    p1 <- meanSdPlot(assay(dsgnObject), plot = F)
+    p1 <- p1$gg + ggtitle("Before Variance Stabilization") + 
+      scale_fill_gradient(low = "cadetblue", high = "purple") + 
+      theme_bw() + theme(legend.position = "bottom")
+    p2 <- meanSdPlot(assay(vsData), plot = F)
+    p2 <- p2$gg + ggtitle("After Variance Stabilization") + 
+      scale_fill_gradient(low = "cadetblue", high = "purple") + 
+      theme_bw() + theme(legend.position = "bottom")
+    grid.arrange(p1, p2, nrow=1)
+  }
+  
+  if(writeTable == TRUE) {
+    # Write the data for future use, if needed:
+    write.table(assay(vsData),
+              file = "vst.txt",
+              sep="\t", 
+              quote=F, 
+              row.names=T)
+  }
+  if(writeRData == TRUE) {
+    save(vsData, file="vst_all_timepoints.Rdata")
+  }
+  return(vsData)
+}
+#VST 1
+#runVST(dsgnObject, blind = FALSE, fitType = "parametric", makePlot = TRUE, writeTable = FALSE, writeRData = FALSE)
+```
+
+```{r, echo=FALSE}
+#Examine Log-Log Plot
+meanCounts <- rowMeans(assay(dsgnObject))      ## Per locus, what is the average expression
+varCounts <- apply(assay(dsgnObject), 1, var)  ## Apply the variance function by margin = 1, which is rows
+
+plot(log(varCounts) ~ log(meanCounts), 
+     ylab = "Natural-log Variance in Gene Expression", 
+     xlab = "Natural-log Mean Expression", 
+     main = "\nLog-Log plot of variance by mean for each gene\n should be approximately linear.\n", 
+     pch = 16, 
+     cex = 0.75)
+abline(lm(log(varCounts+0.0001) ~ log((meanCounts+0.0001))), 
+       col = "#a8325e", 
+       lty = 2, 
+       lwd = 2)
+```
+We will use the local VST function because it has the lowest standard deviation. 
+
+```{r}
+#VST 2
+runVST(dsgnObject, blind = FALSE, fitType = "local", makePlot = TRUE, writeTable = FALSE, writeRData = TRUE)
+
+#VST 3
+#runVST(dsgnObject, blind = FALSE, fitType = "mean", makePlot = TRUE, writeTable = FALSE, writeRData = FALSE)
+
+#VST 4
+#runVST(dsgnObject, blind = FALSE, fitType = "rlog", makePlot = TRUE, writeTable = FALSE, writeRData = FALSE)
+
+```
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+#Split data
+
+#Do Splits from Project 1
+#So we don't have to reinvent the wheel here
+doSplits <- function(vst, algorithm, splitRatio, filterCutoff) {
+  ### @vst = vst dataset as extracted from DESeq2
+  ### @algorithm = ML algorithm used; currently set up for rf and svm
+  ### @splitRatio = the split ratio to employ (training size)
+  ### @filterCutoff = the filter cutoff for median number of VST gene counts
+  
+  ## According to the Valabas et al. (2019) paper, make sure that we are filtering in TRAINING set only! 
+
+  # Extract the VST data and transpose
+  tVST <- t(assay(vst))
+  
+  # We do have gene names, e.g., TRNAV-UAC that are malformed for ranger and randomForest. We will fix that before proceeding:
+  for (c in 1:ncol(tVST)) {
+    colName <- colnames(tVST)[c]
+    colName <- gsub("-", "_", colName)
+    colName -> colnames(tVST)[c]
+  }
+  
+  ## Add the metadata as columns & merge
+  df1 <- cbind(colData(dsgnObject)[1], colData(dsgnObject)[2], colData(dsgnObject)[4], colData(dsgnObject)[5], colData(dsgnObject)[7])       ## We don't need the size factors
+  tVST <- merge(tVST, df1, by = "row.names")
+
+  ## The merge turns back into a dataframe and removes the sample names from the rows; let's put them back:
+  rownames(tVST) <- tVST[,1]
+  tVST <- tVST[,-1]
+  
+  if(algorithm == "svm") {
+    ## Make the factors unordered
+    tVST <- tVST %>% 
+      mutate_if(is.ordered, factor, ordered = FALSE)
+  }
+  
+  ## Create the data partitions
+  ind <- createDataPartition(y = tVST[, c("Longitude")],     ## Treatment is evenly distributed
+                             p = splitRatio,                    ## % into training
+                             list = FALSE)                      ## don't return a list
+  train <- tVST[ind, ]
+  test <- tVST[-ind,]
+  
+  ## Now apply the filtering:
+  # Calculate row medians of VST gene counts
+  medians <- rowMedians(assay(vst))
+
+  # Filter the features out of train:
+  train <- train[, medians > filterCutoff]  
+  print(paste0("After filtering, the number of genes remaining in the dataset are: ", ncol(train)))
+
+  splits <- list(train, test)
+  return(splits)
+}
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load in data
+load("vst_all_timepoints.Rdata")
+
+#Split data
+#Do before processing to avoid data leakage - adjusted splitRatio to allow for adequate data in the test set
+splits <- doSplits(vst = vsData, algorithm = "rf", splitRatio = 0.5, filterCutoff = 5)
+train <- splits[[1]]
+test <- splits[[2]]
+```
+
+
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE, fig.width = 8}
+#Create a PCA data frame
+#I don't think this works as well with numerical data (as opposed to the original categorical variables)
+pca <- plotPCA(vsData, 
+               intgroup = c("Longitude", "Latitude", "Temperature", "Precipitation", "Altitude"), 
+               returnData = TRUE,
+               ntop = 500)
+percentVar <- round(100 * attr(pca, "percentVar"))
+
+#Plot the PCA with the % variance attributable to PC1 and PC2
+ggplot(pca, aes(PC1, PC2, color = Temperature)) +
+  geom_point(size=3, alpha = 0.85) +
+  labs(x = paste0("PC1: ",percentVar[1], "% variance"), 
+       y = paste0("PC2: ",percentVar[2], "% variance"),
+       title = "PCA of Gene Expression by Samples") +
+  xlim(-30,30) +
+  ylim(-15, 15) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 13),
+        legend.position = "right") +
+  facet_wrap(~Longitude, nrow = 1)
+```
+
+```{r}
+#Install packages and load library
+if (!requireNamespace("caret", quietly = TRUE)) {
+  install.packages("caret")
+}
+library(caret)
+```
+
+
+## Discussion
+
+While genetic data is harder to work with, the data preparation has worked fairly well and given some very interesting and important takeaways. Importantly, the variables being considered are all numerical, which lends itself to different machine learning and feature engineering approaches than mainly categorical data. It is clear that the data benefited greatly from the variance stabilizing transformation, as the raw counts had a standard deviation of over 200, while the VST data was just over two, and with a much more stable spread. Principal component analysis, at least the method I used, was not particularly useful and may not be the best choice going forward. Additional feature engineering may be required depending on the type of machine learning model and how well the models perform. It is clear that there are impacts of environment on the SNPs found in each population, however the exact details are still to come. 
+
+## Next Steps
+
+The next step is to run some out-of-box machine learning models and evaluate my choices so far. A random forest model, a support vector machine, and a neural-network will all be trained on the training data and tested on the test set. After the oob models are tested, other techniques can be used to tune the hyperparameters of each model and improve model accuracy. These techniques can include cross validation, grid search, or elastic net. 
+

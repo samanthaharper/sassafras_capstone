@@ -48,15 +48,19 @@ My approach to exploratory data analysis was to engage with the various R object
 
 # Results
 ```{r}
+#Install packages and load library
 if (!requireNamespace("vcfR", quietly = TRUE)) {
   install.packages("vcfR", verbose = FALSE)
 }
 library(vcfR)
+
+#Load VCF data
 vcf <- read.vcfR( "Data/SNP.vcf", verbose = FALSE )
-#examine VCF Object
+#examine VCF object
 vcf
 ```
 ```{r}
+#Install packages and load library
 if (!requireNamespace("adegenet", quietly = TRUE)) {
   install.packages("adegenet")
 }
@@ -69,26 +73,32 @@ x <- vcfR2genlight(vcf)
 x
 ```
 ```{r}
+#Plot object to examine SNP distribution
 snpposi.plot(position(x), genome.size=150, codon=FALSE)
 ```
 Looking at the disribution of the SNPs throughout the genome, we can see that they are fairly evenly spaced. 
 
 ```{r}
+#Plot object to examine alternative alleles
 x.dist <- dist(x)
 glPlot(x)
 ```
 Here we can see that there are up to two alternative bases and how those are distributed throughout the samples. We can see some light banding in the data suggesting that different populations may have differing proportions of alternative alleles. 
 
 ```{r}
+# Create frequency plot for alternative alleles
 myFreq <- glMean(x)
 hist(myFreq, proba=TRUE, col="gold", xlab="Allele frequencies",
 main="Distribution of (second) allele frequencies", ylim=c(0,7))
 temp <- density(myFreq)
+
+#Add line
 lines(temp$x, temp$y*1.5,lwd=2)
 ```
 This graph shows that most SNPs have a low frequency, but there are some that have higher frequencies as well. This means that most of the SNPs in this set appear fewer times. 
 
 ```{r}
+#Create frequency plot with symmetry
 myFreq <- glMean(x)
 myFreq <- c(myFreq, 1-myFreq)
 hist(myFreq, proba=TRUE, col="darkseagreen3", xlab="Allele frequencies",
@@ -100,6 +110,7 @@ lines(temp$x, temp$y*2,lwd=3)
 This can also be visualized as a symmetric graph due to the nature of alleles having two options. 
 
 ```{r}
+#Graph missing data
 temp <- density(glNA(x), bw=10)
 plot(temp, type="n", xlab="Position in the alignment", main="Location of the missing val", xlim=c(-40,55))
 polygon(c(temp$x,rev(temp$x)), c(temp$y, rep(0,length(temp$x))), col=transp("blue",.3))
@@ -123,7 +134,10 @@ As I move forward, the most important data processing step is to produce data in
 # Appendix
 ## Data Dictionary
 ```{r}
+#Convert data to tibble
 data <- vcfR2tidy(vcf)
+
+#examine metadata
 data_dict <- data$meta
 data_dict
 ```
@@ -131,16 +145,15 @@ data_dict
 ## Code
 
 ```{r}
-
-#META Data provides information about the file as well as the abbreviations used elsewhere in the file
-#MAKE TABLE???
+#META data provides information about the file as well as the abbreviations used elsewhere in the file
 queryMETA(vcf)
 queryMETA(vcf, element = 'GT')
 queryMETA(vcf, element = 'DP')
 queryMETA(vcf, element = 'AD')
 queryMETA(vcf, element = 'GL')
-#
-vcf_field_names(vcf)
+```
+
+```{r}
 #sample names
 colnames(vcf@gt)
 
@@ -153,6 +166,7 @@ data$meta
 data$fix
 #Summary of the all the samples
 data$gt
+gdata <- data$gt
 ```
 
 

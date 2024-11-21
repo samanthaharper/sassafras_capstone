@@ -1,4 +1,5 @@
 # Single Nucleotide Polymorphism in Chinese Sassafras Populations
+#### A collection of code and thoughts for staging each section of this project
 
 ## Background
 Since SNPs can help identify genes that are important and that differ between organisms, we can use them to identify important gene differences that may be due to environmental conditions. The research question is: Can we use machine learning algorithms to mine SNPs to find gene or gene regions of interest between natural cultivars (strains) of Sassafras? This question addresses the need for protecting vulnerable populations of Sassafras that are highly sought after due to their ornamental, lumber, and medicinal value (Guan, et al., 2024). It has also been suggested that climate change will have an impact on the habitat availability for Sassafras in China (Zhang, et al., 2020). Future research could lead to a drought or cold resistant strain of Sassafras for industrial uses. 
