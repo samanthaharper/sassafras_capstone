@@ -152,7 +152,7 @@ library(readr)
 #but I'm not super sure what to do with it now?
 #I assume I can do a join with something, but I have no idea what
 Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 4)
-SNP <- read_delim("./Data/SNP.txt", delim = " ")
+#SNP <- read_delim("./Data/SNP.txt", delim = " ")
 ```
 
 ```{r}
