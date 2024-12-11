@@ -1,0 +1,370 @@
+---
+title: 'Genetic Mutations in Sassafras- Investigating Environmental Impacts through Single Nucleotide Polymorphisms'
+author: "Samantha Harper"
+date: "December 9 2024"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+    theme: flatly
+    fig_crop: no
+subtitle: Capstone
+---
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE, 
+                      cache.comments = TRUE,
+                      size = 13)
+```
+
+# Abstract
+
+# Background and Question
+
+Every living thing is governed by genetic material, usually DNA, that provides a 'blueprint' for that organism. Mutations and diversity due to recombination are passed through DNA in individuals that survive and reproduce. Identifying mutations that persist allows scientists to look into the genetic history of an organism; how and why those specific changes persist in certain populations can lead to important new findings about species and their adaptability. One method for examining these mutations is Genotyping by Sequencing (GBS), which identifies single nucleotide polymorphisms (SNPs) within the genome (Guan et al., 2024). However, the analysis of SNPs has historically been difficult.
+
+The focus of this research is the connection between SNPs and environmental factors in Sassafras. Sassafras is a species of tree found throughout China and known for its value as an beautiful ornimental species as well as a source of lumber (Guan et al, 2024). Since SNPs can help identify genes that are important and that differ between organisms, they can be used to identify important gene differences that may be linked to environmental conditions. The research question is: Can we use machine learning algorithms to find statistical associations between SNPs and populations in order to find genes or gene regions of interest between natural cultivars of Sassafras? This question addresses the need for protecting vulnerable populations of Sassafras that are highly sought after due to their ornamental, lumber, and medicinal value (Guan, et al., 2024). It has also been suggested that climate change will have an impact on the habitat availability for Sassafras in China (Zhang, et al., 2020). Future research could lead to a drought or cold resistant strain of Sassafras for industrial uses.
+Although numerous methods to study SNPs and identify gene regions exist, none of these methods are without their drawbacks. SNPs are notoriously difficult to study and machine learning techniques may provide new insight towards this problem. One challenge posed by this type of research is that genetic data is very high dimensional data, leading to the ‘curse of dimensionality’; high dimensional data is often computationally costly and may not yield the best results as not all of the data is useful to our aims (Silva et al.,2022). Using methods such as k-fold cross-validation can help create more accurate models and prevent overfitting. These results could lead to actionable insights that could guide future research towards protecting this species and may even be able to improve forestry approaches towards minimizing the impacts of climate change and deforestation.
+
+
+Hypothesis: Underlying genes, as identified by SNPs, in Sassafras are influenced by environmental factors because environmental pressure can cause mutations to persist in a population that is unique to each area.
+
+Prediction: Populations of Sassafras that are under high environmental pressure are more likely to have many predictive SNPs due to evolutionary influences. This analysis will be conducted using the data collected from Guan, et al. (2024). 
+
+# Data
+
+## Data Aquisition
+
+These data were collected by Guan et al. (2024). DNA was extracted from dried floral leaves of 106 individual trees in across China. Genotyping-by-sequencing was performed to isolate SNPs into a database. Using variables from the environment from which these plants were collected, including altitude gleaned from their latitude and longitude, weather data such as temperature, precipitation, humidity, and average days of sunshine, and possible data about soil that we can find from the latitudes and longitudes, we will attempt to find SNPs, and therefore gene or gene regions, that predict key differences between Sassafras cultivars.
+
+This data is in variant call format (VCF) and contains a ‘meta’ section that provides the necessary metadata including chromosome locations. This data contains the SNPs of 13 Sassafras tzumu (Lauraceae) populations with 106 individuals. There are 11,862 rows that contain Single Nucleotide Polymorphisms.
+
+For this analysis, each of the SNPs will be considered features, while 'id' will be used as the label. In this matter, we can identify which SNPs are most linked with the each of the populations.
+
+
+## Data Cleaning and Data Exploration
+
+The aims for cleaning this data were mainly to organize the genetic data into a form compatible with various objects that can facilitate analysis specific to genetic data. The first step was to transform the VCF data into a tibble for easier manipulation in R. The 'gt' section of the data contains the counts from the Sassafras samples, so this section was isolated. Metadata was joined with the counts data and variables were then cleaned, including removing white space and leading numbers from variable names. Once the variables were compatible, the data were pivoted wider to create a matrix compatible with the design object from DESeq2. Following this cleaning, a variance stabilizing transformation was applied to the data. The results are shown below in figure 1. 
+
+```{r include = FALSE}
+#Install packages and load library
+
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
+rm(list = ls(all = TRUE))
+
+pacman::p_load(tidyverse,
+               vcfR,
+               adegenet,
+               ggplot2, 
+               kableExtra,
+               BiocManager,
+               DESeq2,
+               pheatmap,
+               RColorBrewer,
+               vsn,
+               gridExtra,
+               ggrepel,
+               e1071,
+               caret,
+               randomForest,
+               ranger,
+               multtest,
+               janitor
+)
+```
+
+```{r include = FALSE}
+#Load VCF data
+vcf <- read.vcfR( "Data/SNP.vcf", verbose = FALSE )
+
+#examine VCF object
+vcf
+
+#Convert data to tibble
+data <- vcfR2tidy(vcf)
+
+#Isolate Counts Data
+gdata <- data$gt
+
+#Load Metadata
+sass_metadata <- read_csv("Data/sass_metadata.csv", col_types = cols(Longitude = col_number(), Latitude = col_number(), `Number of Samples` = col_integer(), Temperature = col_number(), Precipitation = col_integer(), `Altitude (m)` = col_integer()))
+
+#Clean Variables
+#Change variables so they don't start with a number
+gdata$chrom_info <- paste("S", gdata$ChromKey, "_", gdata$POS)
+#Remove white space
+gdata$chrom_info <- gsub(" ", "", gdata$chrom_info)
+#Remove other variables
+gdata <- gdata %>% select(chrom_info, Indiv, gt_AD)
+#Pivot wider to fit 
+gdata <- gdata %>% pivot_wider(names_from = Indiv, values_from = gt_AD)
+
+#set up matrix
+gdata <- as.data.frame(gdata)
+rownames(gdata) <- gdata$chrom_info
+gdata <- gdata[ ,-1]
+
+#create proper metadata
+indivs <- unique(data$gt$Indiv)
+indivs <- as.data.frame(indivs)
+indivs$id <- substr(indivs$indivs, 1, 2)
+sass_metadata$id <- substr(sass_metadata$Code, 1, 2)
+joined_meta <- inner_join(sass_metadata, indivs, by = 'id')
+joined_meta <- subset(joined_meta, select = -c(Code))
+
+#Join metadata with sample names
+joined_meta <- as.data.frame(joined_meta)
+rownames(joined_meta) <- joined_meta$indivs
+joined_meta <- subset(joined_meta, select = -c(indivs))
+
+#rename column to exclude the space
+joined_meta$Altitude <- joined_meta$`Altitude (m)`
+```
+
+```{r echo = FALSE}
+
+s1 <- ggplot(sass_metadata, aes(x = Precipitation, y= `Altitude (m)`, color = Code)
+  ) + geom_point(
+  ) + ggtitle("Altidude and Precipitation \nAcross Sample Populations")
+
+s2 <- ggplot(sass_metadata, mapping = aes(x = Longitude, y= Latitude, color = Temperature)
+       ) + geom_point(
+       ) + ggtitle("Spread of Sample Populations")
+
+grid.arrange(s1, s2, nrow=1, top = "Figure 1")
+
+```
+A closer look at the metadata allows us to examine the characteristics of the 13 populations of Sassafras that contain our samples. The Altitude and Precipitation varies across the populations, as the the location, shown by the latitude and longitude. 
+
+```{r, message=FALSE, warning=FALSE, include = FALSE}
+#Create Design Object
+dsgnObject <- DESeqDataSetFromMatrix(countData = gdata, 
+                                     colData = joined_meta,
+                                     design = ~ Longitude + Latitude + Temperature + Altitude)
+#dim(dsgnObject)
+```
+
+```{r, echo = F, warning=FALSE, message=FALSE}
+#Set up VST
+runVST <- function(dsgnObject, blind, fitType, makePlot = TRUE, writeTable = FALSE, writeRData = FALSE) {
+  ## Perform the VST
+  
+  # Check if the fitType is the regularized log:
+  if(fitType == "rlog") {
+    vsData <- rlog(dsgnObject, blind = blind)
+  }
+  ## Otherwise:
+  else {
+    vsData <- varianceStabilizingTransformation(dsgnObject, 
+                                              blind = blind, 
+                                              fitType = fitType)
+  }
+  
+  if(makePlot == TRUE) {
+    # Plot the effect of the VS transform:
+    p1 <- meanSdPlot(assay(dsgnObject), plot = F)
+    p1 <- p1$gg + ggtitle("Before Variance Stabilization") + 
+      scale_fill_gradient(low = "cadetblue", high = "purple") + 
+      theme_bw() + theme(legend.position = "bottom")
+    p2 <- meanSdPlot(assay(vsData), plot = F)
+    p2 <- p2$gg + ggtitle("After Variance Stabilization") + 
+      scale_fill_gradient(low = "cadetblue", high = "purple") + 
+      theme_bw() + theme(legend.position = "bottom")
+    grid.arrange(p1, p2, nrow=1, top = "Figure 2")
+  }
+  
+  if(writeTable == TRUE) {
+    # Write the data for future use, if needed:
+    write.table(assay(vsData),
+              file = "vst.txt",
+              sep="\t", 
+              quote=F, 
+              row.names=T)
+  }
+  if(writeRData == TRUE) {
+    save(vsData, file="vst_all_timepoints.Rdata")
+  }
+  return(vsData)
+}
+
+runVST(dsgnObject, blind = FALSE, fitType = "local", makePlot = TRUE, writeTable = FALSE, writeRData = TRUE)
+```
+It is clear that the data benefited greatly from the variance stabilizing transformation, as the raw counts had a standard deviation of over 200, while the standard deviation of the VST transformed data was just over two. The transformed data also had a much more stable spread. This step prevents variables with naturally higher variance from over-influencing the future model. 
+
+```{r, echo=FALSE}
+#Examine Log-Log Plot
+meanCounts <- rowMeans(assay(dsgnObject))      ## Per locus, what is the average expression
+varCounts <- apply(assay(dsgnObject), 1, var)  ## Apply the variance function by margin = 1, which is rows
+
+plot(log(varCounts) ~ log(meanCounts), 
+     ylab = "Natural-log Variance in Gene Expression", 
+     xlab = "Natural-log Mean Expression", 
+     main = "Figure 3. \nLog-Log plot of variance by mean for each gene", 
+     pch = 16, 
+     cex = 0.75)
+abline(lm(log(varCounts+0.0001) ~ log((meanCounts+0.0001))), 
+       col = "#a8325e", 
+       lty = 2, 
+       lwd = 2)
+```
+
+
+The log-log plot shows an approximately linear relationship between the natural log of the variance and the natural log of the mean. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+#Split data
+
+#Do Splits from Project 1
+#So we don't have to reinvent the wheel here
+doSplits <- function(vst, algorithm, splitRatio, filterCutoff) {
+  ### @vst = vst dataset as extracted from DESeq2
+  ### @algorithm = ML algorithm used; currently set up for rf and svm
+  ### @splitRatio = the split ratio to employ (training size)
+  ### @filterCutoff = the filter cutoff for median number of VST gene counts
+  
+  ## According to the Valabas et al. (2019) paper, make sure that we are filtering in TRAINING set only! 
+
+  # Extract the VST data and transpose
+  tVST <- t(assay(vst))
+  
+  # We do have gene names, e.g., TRNAV-UAC that are malformed for ranger and randomForest. We will fix that before proceeding:
+  for (c in 1:ncol(tVST)) {
+    colName <- colnames(tVST)[c]
+    colName <- gsub("-", "_", colName)
+    colName -> colnames(tVST)[c]
+  }
+  
+  ## Add the metadata as columns & merge
+  df1 <- cbind(colData(dsgnObject)[1], colData(dsgnObject)[2], colData(dsgnObject)[4], colData(dsgnObject)[5], colData(dsgnObject)[7])       ## We don't need the size factors
+  tVST <- merge(tVST, df1, by = "row.names")
+
+  ## The merge turns back into a dataframe and removes the sample names from the rows; let's put them back:
+  rownames(tVST) <- tVST[,1]
+  tVST <- tVST[,-1]
+  
+  if(algorithm == "svm") {
+    ## Make the factors unordered
+    tVST <- tVST %>% 
+      mutate_if(is.ordered, factor, ordered = FALSE)
+  }
+  
+  ## Create the data partitions
+  ind <- createDataPartition(y = tVST[, c("id")],     ## Treatment is evenly distributed
+                             p = splitRatio,                    ## % into training
+                             list = FALSE)                      ## don't return a list
+  train <- tVST[ind, ]
+  test <- tVST[-ind,]
+  
+  ## Now apply the filtering:
+  # Calculate row medians of VST gene counts
+  medians <- rowMedians(assay(vst))
+
+  # Filter the features out of train:
+  train <- train[, medians > filterCutoff]  
+  print(paste0("After filtering, the number of genes remaining in the dataset are: ", ncol(train)))
+
+  splits <- list(train, test)
+  return(splits)
+}
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load in data
+load("vst_all_timepoints.Rdata")
+
+#Split data
+#Do before processing to avoid data leakage - adjusted splitRatio to allow for adequate data in the test set
+splits <- doSplits(vst = vsData, algorithm = "rf", splitRatio = 0.8, filterCutoff = 5)
+train <- splits[[1]]
+test <- splits[[2]]
+```
+
+Finally, the data was split into training and test sets. The ratio was 80% training and 20% test set with each population split evenly among the two sets. Lowly expressed genes are also removed from the dataset. 
+
+For data exploration, the vcf data was transformed into a genlight object; this object makes it easier to produce certain plots and visualizations of genetic data. 
+
+```{r, include = FALSE}
+#Create a genlight object
+x <- vcfR2genlight(vcf)
+x
+```
+
+```{r echo = FALSE}
+#Plot object to examine alternative alleles
+x.dist <- dist(x)
+glPlot(x)
+title("Figure 4. \n Allele Frequencies")
+```
+In Figure 4, we can see the spread of alleles throughout the samples. Since there is a large amount homozygosity, shown by blue and red, and only smaller amounts of purple, it is clear that the populations in this species are not fully mixing. The light banding in data the suggests that different populations have different concentrations of different alleles. 
+
+
+```{r echo = FALSE}
+#Create frequency plot with symmetry
+myFreq <- glMean(x)
+myFreq <- c(myFreq, 1-myFreq)
+hist(myFreq, proba=TRUE, col="darkseagreen3", xlab="Allele frequencies",
+main="Figure 5: Distribution of allele frequencies", nclass=20, ylim = c(0,3.5))
+temp <- density(myFreq, bw=.05)
+lines(temp$x, temp$y*2,lwd=3)
+```
+
+This graph (Figure 5) also supports the idea that Sassafras populations have high rates of homozygosity, with most alleles appearing either very frequently or very infrequently. The symmetry of the allele options is reflected in the symmetry of the graph. One of the possible reasons for this is the geographical barriers posed by the mountainous landscape where Sassafras is found. This also leads to further questions about the pollination methods of Sassafras, as Sassafras does not typically self-pollinate, but the distribution suggests a similar allele distribution to what is found in self-pollinating species. 
+
+
+
+
+
+
+
+# Models
+
+## Data Pre-Processing
+
+## Algorithm Selection
+My proposed analysis will be to use at least two different types of Machine
+Learning Analysis, including one random forest model and one Support Vector
+Machine. Depending on the outcome of those models, deep neural networks have also
+been demonstrated to be effective when working with genetic data (Elgart et al., 2022).
+The Random Forest algorithm was chosen for its robustness and ability to handle
+high-dimensional data, making it suitable for gene expression analysis. I also plan to use
+gini importance to attempt to identify SNPs that may be the most important for
+differences between cultivars in this dataset. SVMs are also capable of working with
+non-linear data. Appropriate feature selection and dimensionality reduction measures
+will probably be necessary. The nature of the available environmental and geographical
+data may influence the efficacy of the analysis. The analysis will predict which SNPs
+indicate cultivar differences due to environmental factors. The hypothesis can be
+supported if the predictive model trained on the data can accurately identify the same
+SNPs on unseen data.
+
+## Final Model
+
+# Conclusions
+In order to access and manipulate the VCF file, several additional R packages were used. The vcfR package allows for loading and manipulation of the data, while the adegenet package was helpful in creating several of the visualizations.
+
+# Discussion and Next Steps
+
+# Code Availability 
+
+The code used for this research is available at:
+https://github.com/samanthaharper/sassafras_capstone
+
+The code is available within the rmd version of this report or in the final code R file. 
+
+# References
+
+Elgart, M., Lyons, G., Romero-Brufau, S. et al. Non-linear machine learning models
+incorporating SNPs and PRS improve polygenic prediction in diverse human
+populations. Commun Biol 5, 856 (2022). https://doi.org/10.1038/s42003-022-03812-z
+Guan, B., Liu, Q., Liu, X. et al. Environment influences the genetic structure and genetic
+differentiation of Sassafras tzumu (Lauraceae). BMC Ecol Evo 24, 80 (2024).
+https://doi.org/10.1186/s12862-024-02264-9
+Silva, P.P., Gaudillo, J.D., Vilela, J.A. et al. A machine learning-based SNP-set analysis
+approach for identifying disease-associated susceptibility loci. Sci Rep 12, 15817
+(2022). https://doi.org/10.1038/s41598-022-19708-1
+Zhang K, Zhang Y, Jia D, Tao J. Species Distribution Modeling of Sassafras Tzumu and
+Implications for Forest Management. Sustainability. 2020; 12(10):4132.
+https://doi.org/10.3390/su12104132

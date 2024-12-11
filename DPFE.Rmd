@@ -228,6 +228,7 @@ runVST(dsgnObject, blind = FALSE, fitType = "local", makePlot = TRUE, writeTable
 #runVST(dsgnObject, blind = FALSE, fitType = "rlog", makePlot = TRUE, writeTable = FALSE, writeRData = FALSE)
 
 ```
+
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 #Split data
 
